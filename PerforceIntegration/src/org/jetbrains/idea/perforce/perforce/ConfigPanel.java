@@ -91,6 +91,7 @@ public class ConfigPanel {
   private JLabel myIgnoreLabel;
   private JRadioButton myUseIgnoreSettingsRadioButton;
   private TextFieldWithBrowseButton m_pathToIgnore;
+  private JCheckBox myAttemptReconnect;
 
   @NlsSafe private static final String CHARSET_ISO8859_1 = "iso8859-1";
   @NlsSafe private static final String CHARSET_ISO8859_15 = "iso8859-15";
@@ -303,6 +304,7 @@ public class ConfigPanel {
     myUsePerforceJobs.setSelected(settings.USE_PERFORCE_JOBS);
     mySwitchToOffline.setSelected(settings.myCanGoOffline);
     myShowIntegratedChangelistsInCheckBox.setSelected(settings.SHOW_INTEGRATED_IN_COMMITTED_CHANGES);
+    myAttemptReconnect.setSelected(settings.ATTEMPT_RECONNECT);
 
     myCharset.removeAllItems();
     myCharset.addItem(PerforceSettings.getCharsetNone());
@@ -360,6 +362,7 @@ public class ConfigPanel {
     settings.USE_PERFORCE_JOBS = myUsePerforceJobs.isSelected();
     settings.myCanGoOffline = mySwitchToOffline.isSelected();
     settings.SHOW_INTEGRATED_IN_COMMITTED_CHANGES = myShowIntegratedChangelistsInCheckBox.isSelected();
+    settings.ATTEMPT_RECONNECT = myAttemptReconnect.isSelected();
   }
 
   public boolean equalsToSettings(PerforceSettings settings) {
@@ -376,6 +379,7 @@ public class ConfigPanel {
     if (! Comparing.equal(settings.USE_PERFORCE_JOBS, myUsePerforceJobs.isSelected())) return false;
     if (! Comparing.equal(settings.myCanGoOffline, mySwitchToOffline.isSelected())) return false;
     if (! Comparing.equal(settings.SHOW_INTEGRATED_IN_COMMITTED_CHANGES, myShowIntegratedChangelistsInCheckBox.isSelected())) return false;
+    if (! Comparing.equal(settings.ATTEMPT_RECONNECT, myAttemptReconnect.isSelected())) return false;
     return Comparing.equal(settings.CHARSET, myCharset.getSelectedItem());
   }
 

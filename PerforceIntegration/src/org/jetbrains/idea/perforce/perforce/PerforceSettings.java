@@ -33,6 +33,7 @@ import com.intellij.openapi.vcs.changes.*;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.impl.DebugUtil;
 import com.intellij.util.ArrayUtilRt;
+import com.intellij.util.concurrency.AppExecutorUtil;
 import com.intellij.util.messages.Topic;
 import com.intellij.util.xmlb.XmlSerializerUtil;
 import com.intellij.util.xmlb.annotations.MapAnnotation;
@@ -53,6 +54,8 @@ import org.jetbrains.idea.perforce.perforce.login.PerforceOfflineNotification;
 
 import java.io.File;
 import java.util.*;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 
 import static com.intellij.credentialStore.CredentialAttributesKt.CredentialAttributes;
 
@@ -63,6 +66,8 @@ public final class PerforceSettings implements PersistentStateComponent<Perforce
   public static final Topic<Runnable> OFFLINE_MODE_EXITED = new Topic<>("Perforce.offline_mode_exited", Runnable.class);
 
   private static final String PERFORCE_SETTINGS_PASSWORD_KEY = "PERFORCE_SETTINGS_PASSWORD_KEY";
+  @Transient
+  public static Integer RECONNECT_INTERVAL_MS = 30000;
 
   private final Project myProject;
   private final PerforceOfflineNotification myOfflineNotification;
@@ -99,6 +104,10 @@ public final class PerforceSettings implements PersistentStateComponent<Perforce
   public int SERVER_TIMEOUT = 20000;
   public boolean USE_PERFORCE_JOBS = false;
   public boolean SHOW_INTEGRATED_IN_COMMITTED_CHANGES = true;
+  public boolean ATTEMPT_RECONNECT = false;
+
+  @Transient
+  public ScheduledFuture<?> onlineCheck = null;
 
 
   //
@@ -216,6 +225,28 @@ public final class PerforceSettings implements PersistentStateComponent<Perforce
 
     if (byUser) {
       saveUnchangedContentsForModifiedFiles();
+    } else if (ATTEMPT_RECONNECT && onlineCheck == null) {
+      onlineCheck = AppExecutorUtil.createBoundedScheduledExecutorService("PerforceReconnectChecker", 1)
+        .scheduleWithFixedDelay(() -> {
+          ApplicationManager.getApplication().runReadAction(() -> {
+              try {
+                ENABLED = true;
+                final PerforceManager perforceManager = PerforceManager.getInstance(myProject);
+                if (!perforceManager.isActive()) return;
+
+                PerforceConnectionManager.getInstance(myProject).updateConnections();
+                for (P4Connection connection : getAllConnections()) {
+                  if (!PerforceLoginManager.getInstance(myProject).check(connection, false)) {
+                    ENABLED = false;
+                    return;
+                  }
+                }
+                ApplicationManager.getApplication().invokeLater(this::enable);
+              } catch (VcsException e) {
+                //ignore
+              }
+            });
+        }, RECONNECT_INTERVAL_MS, RECONNECT_INTERVAL_MS, TimeUnit.MILLISECONDS);
     }
 
     doDisable();
@@ -302,6 +333,10 @@ public final class PerforceSettings implements PersistentStateComponent<Perforce
 
       // could have changed when checking authorization
       if (ENABLED) {
+        if (onlineCheck != null) {
+          onlineCheck.cancel(true);
+          onlineCheck = null;
+        }
         VcsOperationLog.getInstance(myProject).replayLog();
         if (!myOfflineNotification.isEmpty()) {
           myOfflineNotification.clear();

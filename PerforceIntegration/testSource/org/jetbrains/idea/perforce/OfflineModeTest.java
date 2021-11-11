@@ -2,6 +2,7 @@ package org.jetbrains.idea.perforce;
 
 import com.intellij.diagnostic.ThreadDumper;
 import com.intellij.execution.process.ProcessOutput;
+import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.WriteAction;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.fileEditor.impl.LoadTextUtil;
@@ -20,6 +21,7 @@ import org.jetbrains.idea.perforce.operations.P4MoveRenameOperation;
 import org.jetbrains.idea.perforce.operations.VcsOperation;
 import org.jetbrains.idea.perforce.operations.VcsOperationLog;
 import org.jetbrains.idea.perforce.perforce.PerforceCachingContentRevision;
+import org.jetbrains.idea.perforce.perforce.PerforceSettings;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -777,6 +779,24 @@ public class OfflineModeTest extends PerforceTestCase {
     getChangeListManager().waitUntilRefreshed();
     assertSameElements(getChangeListManager().getUnversionedFiles(), fileB);
     assertSameElements(getChangeListManager().getIgnoredFilePaths(), ignoredFiles);
+  }
+
+  @Test
+  public void testOfflineReconnect() {
+    PerforceSettings.getSettings(myProject).ATTEMPT_RECONNECT = true;
+    PerforceSettings.RECONNECT_INTERVAL_MS = 500;
+    ApplicationManager.getApplication().invokeAndWait(() -> PerforceSettings.getSettings(myProject).disable(false));
+    assertFalse(PerforceSettings.getSettings(myProject).ENABLED);
+    assertNotNull(PerforceSettings.getSettings(myProject).onlineCheck);
+    for (int i = 0; i < 5; i++) {
+      try {
+        Thread.sleep(500);
+      } catch (Exception e) {}
+      if (PerforceSettings.getSettings(myProject).ENABLED && PerforceSettings.getSettings(myProject).onlineCheck == null) {
+        return;
+      }
+    }
+    fail("Failed to reactivate perforce connection");
   }
 
   private VirtualFile createAndSubmit(final String fileName, final String content) {
